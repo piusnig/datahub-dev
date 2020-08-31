@@ -1,26 +1,21 @@
 """
     This script is the DataHub Data Validator:
-    So Once a new file lands in s3 DataHub bucket, we’d like to validate automatically:
+    So Once a new file lands in s3 DataHub bucket, validate automatically:
         1. Filenames are per spec
         2. Structure (ie fields)
-        3. Content (ie rows and datatypes)
+        3. Content (ie rows and datatypes, PK vilations)
 
     Any invalidations are:
         1. Flagged and logged
         2. Alerted back to the Partner
-        3. Prevent the file from processing further
 """
 import csv
-import logging
-import os
 import re
-import tempfile
 from collections import OrderedDict
 from datetime import datetime
 from io import StringIO, BytesIO
 
 import boto3
-import botocore
 import pandas as pd
 
 
@@ -97,7 +92,6 @@ def lambda_handler(event, context=None):
                 log = error_logs.log_info_wrong_file_name(file, status)
 
             if log:
-                pass
 
                 # send_email
                 # SendEmail().send_email(log)
@@ -131,7 +125,7 @@ class ValidateFile:
             settings (object): settings used during execution
 
         return:
-            if correct event: file_path_list (list)             
+            if correct event: file_path_list (list)
             else: None:
         """
 
@@ -176,7 +170,7 @@ class ValidateFile:
             mt_data (dataframe): from settings metadata file
 
         return:
-            if valid file name: message (str): Success               
+            if valid file name: message (str): Success
             else: message (dict)
         """
         try:
@@ -223,7 +217,7 @@ class ValidateFile:
             mt_data (dataframe): from settings metadata file
 
         return:
-            if valid file name: message (str): Success               
+            if valid file name: message (str): Success
             else: message (dict)
         """
         try:
@@ -257,7 +251,7 @@ class ValidateFile:
             fn_data (dataframe): from settings file_names file
 
         return:
-            if valid file name: message (str): Success               
+            if valid file name: message (str): Success
             else: message (dict)
         """
         try:
@@ -308,7 +302,7 @@ class ValidateFile:
             file (File Object): stores file object
 
         return:
-            if file is not empty: message (str): Success               
+            if file is not empty: message (str): Success
             else: message (dict)
         """
         try:
@@ -366,11 +360,11 @@ class ErrorLogging:
     def __init__(self, partner_schedule):
         self.partner_schedule = partner_schedule
         self.error_types = {
-            1: {"priority": "CRITICAL", "description": "wrong file name",},
-            2: {"priority": "CRITICAL", "description": "wrong file structure",},
-            3: {"priority": "CRITICAL", "description": "empty file",},
-            4: {"priority": "CRITICAL", "description": "wrong field data types",},
-            5: {"priority": "URGENT", "description": "PK Violation",},
+            1: {"priority": "CRITICAL", "description": "wrong file name"},
+            2: {"priority": "CRITICAL", "description": "wrong file structure"},
+            3: {"priority": "CRITICAL", "description": "empty file"},
+            4: {"priority": "CRITICAL", "description": "wrong field data types"},
+            5: {"priority": "URGENT", "description": "PK Violation"},
         }
         self.date_time = datetime.utcnow()
         self.date = str(self.date_time.strftime("%Y%m%d"))
@@ -401,7 +395,7 @@ class ErrorLogging:
 
             return log
         except BaseException as e:
-            file_empty(
+            print(
                 "exception: class ErrorLogging: Method: log_info_wrong_file_name: "
                 + str(e)
             )
@@ -581,6 +575,14 @@ class ErrorLogging:
             )
 
     def add_log_description(self, log):
+        """This method creates a log description for given error codes
+
+        Attributes:
+            log (dict): error data for formating
+
+        return:
+            desc (str): log description
+        """
         try:
             desc = ""
             if log["error_code"] == 1:
@@ -647,8 +649,6 @@ class ErrorLogging:
                     + ": Number: "
                     + str(log["description"][cols[-1]].sum())
                 )
-
-                row_list = []
                 for index, rows in log["description"].iterrows():
                     if index <= 2:
                         desc += "\n\t\tField values: " + (
@@ -666,27 +666,37 @@ class ErrorLogging:
 
     def add_logs_to_bucker(self, logs_bucket, log):
         try:
-            "datahub_error_logs_partner_program_file_date.csv"
+            # datahub_error_logs_partner_program_file_date.csv
 
             bfd = BucketFileData()
-            # file_path = log["log_file_name"]
             file_path = log["log_file_path"]
 
             df = pd.DataFrame(log, index=[0])
-            file_df = bfd.read_csv(logs_bucket, file_path)
+            file_logs_df = bfd.read_csv(logs_bucket, file_path)
 
-            if file_df is not None:
-                file_df = pd.concat([file_df[self.cols], df[self.cols]])[self.cols]
+            if file_logs_df is not None:
+                # concatenate logs
+                file_logs_df = pd.concat([file_logs_df[self.cols], df[self.cols]])[
+                    self.cols
+                ]
             else:
-                file_df = df[self.cols]
-            bfd.upload_csv(logs_bucket, file_df, file_path)
-            return file_df
+                file_logs_df = df[self.cols]
+            bfd.upload_csv(logs_bucket, file_logs_df, file_path)
+            return file_logs_df
         except BaseException as e:
             print(
                 "exception: class ErrorLogging: Method: add_logs_to_bucker: " + str(e)
             )
 
     def reorder_log(self, error_log):
+        """This method reorders the logs into correct format
+
+        Attributes:
+            error_log (dict): log to reorder.
+
+        return:
+            log (OrderedDict): ordered log
+        """
         log = OrderedDict()
         for col in self.cols:
             if col not in error_log.keys():
@@ -696,6 +706,11 @@ class ErrorLogging:
         return log
 
     def get_error_cols(self):
+        """This method returns column ordering
+
+        return:
+            cols (list): ordered columns
+        """
         cols = [
             "error_code",
             "error_type",
@@ -720,7 +735,20 @@ class ErrorLogging:
 
 
 class Settings:
-    """ This sets settings for the parameters needed the metadata sheet """
+    """This class used to declare settings that will be used during execution
+
+    Attributes:
+        logs_bucket (str): bucket where the logs folders and files are located
+        settings_bucket (str): bucket where the settings folders and files are located
+        metadata_file (str): file location for metadata file with partner/program level file settings
+        fieldnames_file (str): file location for file field names settings
+        partner_schedule_file (str): file location for partner level settings
+        partner_folders (list): folders which will be checked
+        mt_data (dataframe): metadata data
+        ps_data (dataframe): partner schedule data
+        fn_data (dataframe): file names data
+        cls_read_file (class obj): BucketFileData object for reading file data
+    """
 
     def __init__(self,):
         self.settings_bucket = "coursera-data-engineering"
@@ -735,7 +763,11 @@ class Settings:
         self.fn_data = None
         self.cls_read_file = BucketFileData()
 
-    def get_metadata(self, mt_data=None):
+    def get_metadata(self):
+        """This method extracts metadata from the metadata file
+        return:
+            mt_data (dataframe): metadata data
+        """
         try:
             mt_data = self.cls_read_file.read_csv(
                 self.settings_bucket, self.metadata_file
@@ -750,6 +782,10 @@ class Settings:
             print("exception: class Settings: Method: get_metadata: " + str(e))
 
     def get_partner_schedule(self):
+        """This method extracts partner schedule data from the partner_schedule file
+        return:
+            ps_data (dataframe): partner schedule data
+        """
         try:
             ps_data = self.cls_read_file.read_csv(
                 self.settings_bucket, self.partner_schedule_file
@@ -758,7 +794,11 @@ class Settings:
         except BaseException as e:
             print("exception: class Settings: Method: get_partner_schedule: " + str(e))
 
-    def get_fieldnames(self, fn_data=None):
+    def get_fieldnames(self,):
+        """This method extracts file names data from the file_names file
+        return:
+            fn_data (dataframe): file names data
+        """
         try:
             fn_data = self.cls_read_file.read_csv(
                 self.settings_bucket, self.fieldnames_file
@@ -774,6 +814,8 @@ class Settings:
             print("exception: class Settings: Method: get_fieldnames: " + str(e))
 
     def set_file_settings(self, file_path_no_ext=None):
+        """This method sets file sttings data for different files
+        """
         mt_data = self.get_metadata()
         ps_data = self.get_partner_schedule()
         fn_data = self.get_fieldnames()
@@ -785,20 +827,16 @@ class Settings:
         self.ps_data = ps_data
         self.fn_data = fn_data
 
-    def get_valid_file(self):
-        files = [
-            "applications",
-            "degree_course_memberships",
-            "degree_courses",
-            "degree_terms_courses",
-            "degree_program_memberships",
-            "degree_term_memberships",
-            "terms",
-            "students",
-        ]
-        return files
-
     def get_field_regex(self, data_type, length, mandatory_values):
+        """This method reorders the logs into correct format
+
+        Attributes:
+            data_type (str): datatype to check
+            length (int): length of the string to check
+            mandatory_values (str): mandatory values to be used.
+        return:
+            regex (str): regex string to use for the diffrent data types
+        """
         try:
             regex_dict = {
                 "EMAIL": r"^(?!([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]))",
@@ -829,22 +867,33 @@ class Settings:
                     }
                 )
             for key, regex in regex_dict.items():
-                if key == data_type:
+                if key.lower() == str(data_type).lower():
                     return regex
         except BaseException as e:
             print("exception: class Settings: Method: get_field_regex: " + str(e))
 
 
 class BucketFileData:
+    """This class used read/upload buket file data BucketFileData
+
+    Attributes:
+        s3 (boto.client):  used to declare s3 bucket client methods
+    """
+
     def __init__(self, s3=None):
         self.s3 = boto3.client("s3")
 
     def read_csv(self, bucket, file_path):
-        """Function reads csv file into and returns a pandas data frame"""
+        """Function reads csv file and returns a pandas data frame
+        Attributes:
+            bucket (str):  name of the bucket string
+            file_path (str):  path to the file string
+        return:
+            data_frame (dataframe): dataframe with data from csv
+        """
         try:
 
             res = self.s3.get_object(Bucket=bucket, Key=file_path)["Body"]
-
             data_frame = pd.read_csv(
                 BytesIO(res.read()),
                 encoding="ISO-8859-1",
@@ -863,6 +912,14 @@ class BucketFileData:
             )
 
     def upload_csv(self, bucket, file_df, s3_file_path):
+        """Function upload csv file into bucket and returns a pandas data frame
+        Attributes:
+            bucket (str):  name of the bucket string
+            s3_file_path (str):  path where the file should be put
+            file_df (dataframe):  dataframe to convert to csv
+        return:
+            response (dict): indicate sucess
+        """
         try:
 
             buffer = StringIO()
@@ -871,7 +928,7 @@ class BucketFileData:
             response = self.s3.put_object(
                 Body=buffer.getvalue(), Bucket=bucket, Key=s3_file_path
             )
-
+            return response
         except Exception as e:
             print(
                 "exception: class BucketFileData: Method: upload_csv: bucket: " + str(e)
@@ -879,6 +936,22 @@ class BucketFileData:
 
 
 class File:
+    """This class used model File object
+
+    Attributes:
+        file_path_list (list):  file path list
+    return:
+        partner_slug (str): partner name
+        program_slug (str): program name
+        folder_name (str): folder where the file is located
+        file_name (str): name of the file with extension
+        file_path (str): full file path
+        file_date_stamp (str): file date stamp string
+        file_no_date_stamp_ext (str): file path with not date extension
+        file_path_no_ext =  file path no extension
+        self.file_no_of_rows = None
+    """
+
     def __init__(self, file_path_list=None):
         """
         This class models the file object.
@@ -893,9 +966,6 @@ class File:
         self.file_no_date_stamp_ext = file_path_list[3].replace(
             "_" + self.file_date_stamp, ""
         )
-        self.file_metadata = pd.DataFrame()
-        self.file_metadata_regex = pd.DataFrame()
-        self.file_regex = self.set_file_regex(self.file_no_date_stamp_ext)
         self.file_path_no_ext = "/".join(
             file_path_list[:3] + [self.file_no_date_stamp_ext]
         )
@@ -959,20 +1029,22 @@ class SendEmail:
         client = boto3.client("ses")
         response = client.send_email(
             Source=fromEmail,
-            Destination={"ToAddresses": email[1], "BccAddresses": email[0],},
+            Destination={"ToAddresses": email[1], "BccAddresses": email[0]},
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
                 "Body": {"Text": {"Data": message, "Charset": "UTF-8"}},
             },
-            # ReplyToAddresses=[replyTo],
+            ReplyToAddresses=[replyTo],
         )
         print(message)
-        return {"code": 0, "message": "success"}
+        return {"code": 0, "message": response}
 
     def get_email_message(self, log):
         """ This function constructs the email message
+        Attributes:
+            log (OrderDict): log information
         return:
-            message: string
+            message (str): formatted email message
         """
         message = "\n\nThank you for your partnership in data exchange with Coursera."
         message += "\nPlease review the below issue(s) "
