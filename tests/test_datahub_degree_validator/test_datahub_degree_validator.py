@@ -161,17 +161,17 @@ class TestValidateFile(TestBase):
             validate_file.validate_field_datatypes(file, settings), type(dict())
         )
 
-    # def test_validate_file_pk_violation_WHEN_correct_files_event_THEN_Success(
-    #     self, correct_files_event
-    # ):
-    #     event_key = correct_files_event["detail"]["requestParameters"]["key"]
-    #     file_path_list = list(map(str.lower, event_key.split("/")))
+    def test_validate_file_pk_violation_WHEN_correct_files_event_THEN_Success(
+        self, correct_files_event
+    ):
+        event_key = correct_files_event["detail"]["requestParameters"]["key"]
+        file_path_list = list(map(str.lower, event_key.split("/")))
 
-    #     validate_file = ValidateFile()
-    #     settings = Settings()
-    #     file = File(file_path_list)
-    #     settings.set_file_settings()
-    #     assert "Success" == validate_file.validate_file_pk_violation(file, settings)
+        validate_file = ValidateFile()
+        settings = Settings()
+        file = File(file_path_list)
+        settings.set_file_settings(file.file_path_no_ext)
+        assert "Success" == validate_file.validate_file_pk_violation(file, settings)
 
 
 @mock_s3

@@ -93,11 +93,12 @@ def lambda_handler(event, context=None):
 
             if log:
 
-                # send_email
-                # SendEmail().send_email(log)
-
                 # add logs to logs_bucket
-                error_logs.add_logs_to_bucker(settings.logs_bucket, log)
+                email_flag = error_logs.add_logs_to_bucker(settings.logs_bucket, log)
+                # if email_flag:
+                #     # send_email
+                #     SendEmail().send_email(log)
+
             print(file.file_path, ": status: ", status)
             return status
 
@@ -155,7 +156,7 @@ class ValidateFile:
                     not in excepted_files
                 ):
                     return file_path_list
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_lambda_event: "
                 + str(e)
@@ -204,7 +205,7 @@ class ValidateFile:
                 message = {"error_code": 1, "file_path": file_path_list}
                 return message
             return message
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_name: " + str(e)
             )
@@ -237,7 +238,7 @@ class ValidateFile:
                     "expected_fields": file_structure_cols,
                 }
             return message
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_column_structure: "
                 + str(e)
@@ -287,7 +288,7 @@ class ValidateFile:
                 return message
 
             return "Success"
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_field_datatypes: "
                 + file.file_path
@@ -311,7 +312,7 @@ class ValidateFile:
             if file_data is None or file_data.empty:
                 message = {"error_code": 3}
             return message
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_empty: " + str(e)
             )
@@ -332,12 +333,12 @@ class ValidateFile:
                 index=pk_cols, aggfunc="size"
             ).reset_index()
             pks_rows.columns = [*pks_rows.columns[:-1], "No"]
-            pks_rows = pks_rows[pks_rows["No"] > 1]
+            pks_rows = pks_rows[pks_rows["No"] > 1].reset_index()
 
             if not pks_rows.empty:
                 message = {"error_code": 5, "pks_rows": pks_rows}
             return message
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_pk_violation: "
                 + file.file_path
@@ -394,7 +395,7 @@ class ErrorLogging:
             log = self.reorder_log(log)
 
             return log
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: log_info_wrong_file_name: "
                 + str(e)
@@ -424,7 +425,7 @@ class ErrorLogging:
             log["description"] = self.add_log_description(log)
             log = self.reorder_log(log)
             return log
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: log_info_wrong_field_datatypes: "
                 + str(e)
@@ -453,7 +454,7 @@ class ErrorLogging:
             log = self.add_common_fields_to_log(log, file)
             log = self.reorder_log(log)
             return log
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: log_info_file_empty: " + str(e)
             )
@@ -490,7 +491,7 @@ class ErrorLogging:
             log["expected_fields"] = ",".join(log["expected_fields"])
 
             return self.reorder_log(log)
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: log_info_wrong_file_structure: "
                 + str(e)
@@ -518,9 +519,10 @@ class ErrorLogging:
             log["priority"] = self.error_types[error_log["error_code"]]["priority"]
             log = self.add_common_fields_to_log(log, file)
             log["description"] = self.add_log_description(log)
+            print(log["description"])
             log = self.reorder_log(log)
             return log
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: log_info_wrong_field_datatypes: "
                 + str(e)
@@ -568,7 +570,7 @@ class ErrorLogging:
             )
 
             return log
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: add_common_fields_to_log: "
                 + str(e)
@@ -585,7 +587,7 @@ class ErrorLogging:
         """
         try:
             desc = ""
-            if log["error_code"] == 1:
+            if log["error_code"] == 1:  # file name
                 desc = " ".join(
                     [
                         "\n\t" + log["file_name"],
@@ -644,22 +646,21 @@ class ErrorLogging:
             elif log["error_code"] == 5:  # field pk violation
                 cols = list(log["description"].columns)
                 desc = (
-                    "\n\tDuplicates in Primary Key columns: "
-                    + ", ".join(cols[:-1])
-                    + ": Number: "
+                    "\n\tDuplicates in Primary Key columns:"
+                    + "\n\t\t"
+                    + ", ".join(cols[1:-1])
+                    + ": Total Duplicates: "
                     + str(log["description"][cols[-1]].sum())
                 )
+
                 for index, rows in log["description"].iterrows():
-                    if index <= 2:
-                        desc += "\n\t\tField values: " + (
-                            ", ".join(map(str, list(rows[cols[:-1]])))
-                            + ": Number: "
-                            + str(rows[cols[-1]])
-                        )
-                    else:
-                        break
+                    desc += "\n\t\tFor: " + (
+                        ", ".join(map(str, list(rows[cols[:-1]])))
+                        + ": Duplicates: "
+                        + str(rows[cols[-1]])
+                    )
             return desc
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: add_log_description: " + str(e)
             )
@@ -673,8 +674,11 @@ class ErrorLogging:
 
             df = pd.DataFrame(log, index=[0])
             file_logs_df = bfd.read_csv(logs_bucket, file_path)
-
+            email_flag = True
             if file_logs_df is not None:
+                # check if email already sent
+                if list(df["description"])[0] in list(file_logs_df["description"]):
+                    email_flag = False
                 # concatenate logs
                 file_logs_df = pd.concat([file_logs_df[self.cols], df[self.cols]])[
                     self.cols
@@ -682,8 +686,8 @@ class ErrorLogging:
             else:
                 file_logs_df = df[self.cols]
             bfd.upload_csv(logs_bucket, file_logs_df, file_path)
-            return file_logs_df
-        except BaseException as e:
+            return email_flag
+        except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: add_logs_to_bucker: " + str(e)
             )
@@ -729,6 +733,7 @@ class ErrorLogging:
             "priority",
             "partner_emails",
             "internal_emails",
+            "send_email",
             "date_time",
         ]
         return cols
@@ -778,7 +783,7 @@ class Settings:
             )
             mt_data["file_prefix"] = mt_data[cols].apply(lambda i: "/".join(i), axis=1)
             return mt_data
-        except BaseException as e:
+        except Exception as e:
             print("exception: class Settings: Method: get_metadata: " + str(e))
 
     def get_partner_schedule(self):
@@ -791,7 +796,7 @@ class Settings:
                 self.settings_bucket, self.partner_schedule_file
             )
             return ps_data
-        except BaseException as e:
+        except Exception as e:
             print("exception: class Settings: Method: get_partner_schedule: " + str(e))
 
     def get_fieldnames(self,):
@@ -810,7 +815,7 @@ class Settings:
                 axis=1,
             )
             return fn_data
-        except BaseException as e:
+        except Exception as e:
             print("exception: class Settings: Method: get_fieldnames: " + str(e))
 
     def set_file_settings(self, file_path_no_ext=None):
@@ -869,7 +874,7 @@ class Settings:
             for key, regex in regex_dict.items():
                 if key.lower() == str(data_type).lower():
                     return regex
-        except BaseException as e:
+        except Exception as e:
             print("exception: class Settings: Method: get_field_regex: " + str(e))
 
 
@@ -903,7 +908,7 @@ class BucketFileData:
             data_frame.columns = map(str.lower, data_frame.columns)
 
             return data_frame
-        except BaseException as e:
+        except Exception as e:
             print(
                 "exception: class BucketFileData: Method: read_csv: bucket: "
                 + file_path

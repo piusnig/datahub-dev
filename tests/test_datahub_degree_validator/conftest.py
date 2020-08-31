@@ -34,7 +34,8 @@ def get_files(file_types):
             "test/degree/enrollments/terms_20200125.csv",  # with Columns
         ],
         "file_pk_violation": [
-            "test/degree/enrollments/terms_20200123.csv",  # No Columns
+            "test/degree/enrollments/terms_20200123.csv",
+            "test/degree/enrollments/degree_program_memberships_20200828.csv",
         ],
     }
     files = [
@@ -143,6 +144,7 @@ def upload_partner_test_files(res, bucket):
         "terms_20200129.csv",
         "degree_course_memberships_20200724.csv",
         "degree_term_memberships_20200805.csv",
+        "degree_program_memberships_20200828.csv",
     ]
     upload_file(res, bucket, folder, files)
 
