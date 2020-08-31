@@ -22,10 +22,9 @@ from datahub_degree_validator.datahub_degree_validator import (  # LogInfo,; Sen
 
 @mock_s3
 class TestLambdaHandler(TestBase):
-    def test_lambda_handler_WHEN_correct_correct_files_event_THEN_Success(
+    def test_lambda_handler_WHEN_correct_files_event_THEN_Success(
         self, correct_files_event
     ):
-        print(lambda_handler(correct_files_event))
         assert "Success" == lambda_handler(correct_files_event)
 
     def test_lambda_handler_WHEN_WrongFileEvent_THEN_None(self, wrong_files_event):
@@ -53,6 +52,9 @@ class TestLambdaHandler(TestBase):
         self, file_pk_violation_event
     ):
         assert isinstance(lambda_handler(file_pk_violation_event), type(dict()))
+
+    def test_lambda_handler_WHEN_swap_files_event_THEN_Success(self, swap_files_event):
+        assert "Success" == lambda_handler(swap_files_event)
 
     def test_lambda_handler_WHEN_bad_event_THEN_KeyError(self, bad_lambda_event):
         with pytest.raises(KeyError):

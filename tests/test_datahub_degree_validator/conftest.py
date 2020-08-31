@@ -37,6 +37,7 @@ def get_files(file_types):
             "test/degree/enrollments/terms_20200123.csv",
             "test/degree/enrollments/degree_program_memberships_20200828.csv",
         ],
+        "swap_files": ["test/degree/enrollments/degree_term_courses_20200830.csv",],
     }
     files = [
         {"detail": {"requestParameters": {"bucketName": PartnerBucket, "key": i}}}
@@ -82,6 +83,11 @@ def file_empty_event(request):
 
 @pytest.fixture(params=get_files("file_pk_violation"))
 def file_pk_violation_event(request):
+    return request.param
+
+
+@pytest.fixture(params=get_files("swap_files"))
+def swap_files_event(request):
     return request.param
 
 
@@ -145,6 +151,7 @@ def upload_partner_test_files(res, bucket):
         "degree_course_memberships_20200724.csv",
         "degree_term_memberships_20200805.csv",
         "degree_program_memberships_20200828.csv",
+        "degree_term_courses_20200830.csv",
     ]
     upload_file(res, bucket, folder, files)
 

@@ -95,9 +95,9 @@ def lambda_handler(event, context=None):
 
                 # add logs to logs_bucket
                 email_flag = error_logs.add_logs_to_bucker(settings.logs_bucket, log)
-                if email_flag:
-                    # send_email
-                    SendEmail().send_email(log)
+                # if email_flag:
+                #     # send_email
+                #     SendEmail().send_email(log)
 
             print(file.file_path, ": status: ", status)
             return status
@@ -184,7 +184,7 @@ class ValidateFile:
                 ].drop_duplicates(keep="first")
             )
             message = "Success"
-            file_names = [
+            file_names = set([
                 "applications",
                 "degree_course_memberships",
                 "degree_courses",
@@ -193,7 +193,11 @@ class ValidateFile:
                 "degree_term_memberships",
                 "terms",
                 "students",
-            ]
+            ] + list(
+                mt_data[mt_data["file_prefix"] == file_prefix]["file"].drop_duplicates(
+                    keep="first"
+                )
+            ))
             if (
                 len(file_name[-1].split(".")) != 2
                 or not mt_file_prefix
@@ -324,11 +328,9 @@ class ValidateFile:
 
             file_data = BucketFileData().read_csv(self.partner_bucket, file.file_path)
             message = "Success"
-
             pk_cols = mt_data[mt_data["unique_pk"] == 1]["field"].values.tolist()
             if not pk_cols:
                 pk_cols = fn_data[fn_data["pk"] == 1]["field"].values.tolist()
-
             pks_rows = file_data.pivot_table(
                 index=pk_cols, aggfunc="size"
             ).reset_index()
@@ -652,13 +654,17 @@ class ErrorLogging:
                     + ": Total Duplicates: "
                     + str(log["description"][cols[-1]].sum())
                 )
-
+                i = 0
                 for index, rows in log["description"].iterrows():
+                    if i > 2:
+                        break
                     desc += "\n\t\tFor: " + (
-                        ", ".join(map(str, list(rows[cols[:-1]])))
+                        ", ".join(map(str, list(rows[cols[1:-1]])))
                         + ": Duplicates: "
                         + str(rows[cols[-1]])
                     )
+                    i += 1
+                desc += "\n\t\t..........."
             return desc
         except Exception as e:
             print(
@@ -777,6 +783,7 @@ class Settings:
             mt_data = self.cls_read_file.read_csv(
                 self.settings_bucket, self.metadata_file
             ).sort_values(by=["row_id"])
+            mt_data = self.swap_mt_data_file_names(mt_data)
             cols = ["partner", "program", "folder", "file"]
             mt_data["folder_path"] = mt_data[cols[:3]].apply(
                 lambda row: "/".join(row), axis=1
@@ -814,9 +821,53 @@ class Settings:
                 ),
                 axis=1,
             )
+            fn_data = self.swap_fn_data_file_names(fn_data)
             return fn_data
         except Exception as e:
             print("exception: class Settings: Method: get_fieldnames: " + str(e))
+
+    def swap_mt_data_file_names(self, mt_data):
+        try:
+            ps_data = self.get_partner_schedule()
+
+            for _, row in ps_data.iterrows():
+                if str(row["swap_files"]) != "nan":
+                    programs = str(row["swap_files"]).split("|")
+                    for program in programs:
+                        program, files = program.split(":")
+                        files = files.split(";")
+                        for file in files:
+                            file = file.split(",")
+                            mt_data.loc[
+                                (mt_data["partner"] == row["partner"])
+                                & (mt_data["program"] == program)
+                                & (mt_data["file"] == file[0]),
+                                "file",
+                            ] = file[1]
+            return mt_data
+        except Exception as e:
+            print(
+                "exception: class Settings: Method: swap_mt_data_file_names: " + str(e)
+            )
+
+    def swap_fn_data_file_names(self, fn_data):
+        try:
+            ps_data = self.get_partner_schedule()
+
+            for _, row in ps_data.iterrows():
+                if str(row["swap_files"]) != "nan":
+                    programs = str(row["swap_files"]).split("|")
+                    for program in programs:
+                        program, files = program.split(":")
+                        files = files.split(";")
+                        for file in files:
+                            file = file.split(",")
+                            fn_data.loc[(fn_data["file"] == file[0]), "file"] = file[1]
+            return fn_data
+        except Exception as e:
+            print(
+                "exception: class Settings: Method: swap_fn_data_file_names: " + str(e)
+            )
 
     def set_file_settings(self, file_path_no_ext=None):
         """This method sets file sttings data for different files
