@@ -17,6 +17,7 @@ from datahub_degree_validator.datahub_degree_validator import (  # LogInfo,; Sen
 # pytest --cov-report term-missing --cov=datahub_degree_validator tests/
 # pytest -s
 # isort tests/test_datahub_degree_validator/*.py datahub_degree_validator/datahub_degree_validator.py
+# git rm --cached .vscode/settings.json
 
 
 @mock_s3
