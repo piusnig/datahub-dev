@@ -837,7 +837,7 @@ class Settings:
                         program, files = program.split(":")
                         files = files.split(";")
                         for file in files:
-                            file = file.split(",")
+                            file = file.replace("\\", "").split(",")
                             mt_data.loc[
                                 (mt_data["partner"] == row["partner"])
                                 & (mt_data["program"] == program)
@@ -859,7 +859,7 @@ class Settings:
                     programs = str(row["swap_files"]).split("|")
                     for program in programs:
                         program, files = program.split(":")
-                        files = files.split(";")
+                        files = files.replace("\\", "").split(";")
                         for file in files:
                             file = file.split(",")
                             fn_data.loc[(fn_data["file"] == file[0]), "file"] = file[1]

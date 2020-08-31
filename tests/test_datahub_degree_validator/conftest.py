@@ -37,7 +37,7 @@ def get_files(file_types):
             "test/degree/enrollments/terms_20200123.csv",
             "test/degree/enrollments/degree_program_memberships_20200828.csv",
         ],
-        "swap_files": ["test/degree/enrollments/degree_term_courses_20200830.csv",],
+        "swap_files": ["test/degree/enrollments/degree_term_courses_20200830.csv"],
     }
     files = [
         {"detail": {"requestParameters": {"bucketName": PartnerBucket, "key": i}}}
