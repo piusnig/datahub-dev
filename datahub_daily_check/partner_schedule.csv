@@ -1,0 +1,10 @@
+partner,programs,partner_emails,internal_emails,run_hour,ignore_files,swap_files
+umich,"mph-umich,master-of-applied-data-science-umich","'David Lawrence-Lupton'<jdlawren@umich.edu>","data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;umich@coursera.org",23:59,master-of-applied-data-science-umich:applications|mph-umich:applications,
+penn,mcit,,"data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;penn@coursera.org",23:59,,"terms,degree_terms:degree_terms_courses,degree_term_courses"
+illinois,"imba,instructional-design-illinois,imsa,illinois-campus,masters-in-computer-data-science","'Anna Mehl'<annamehl@illinois.edu>;'Maryalice Wu'<malice@illinois.edu>","data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;illinois@coursera.org",23:59,instructional-design-illinois:applications|illinois-campus:applications,
+boulder,msee-boulder,,"data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;boulder@coursera.org",23:59,,
+macquarie,mq-global-mba,,"data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;macquarie@coursera.org",23:59,,
+asu,"mcs,big-data-asu",,"data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;asu@coursera.org",23:59,"mcs:degree_terms_courses,degree_course_memberships,students,degree_courses,degree_term_memberships,terms|",
+london,bachelor-of-science-computer-science-london,"'Carron Windsor'<Carron.Windsor@london.ac.uk>;'Stephen Ogden'<c2eccd35.london.ac.uk@emea.teams.ms>;'Jon Bitmead'<Jon.Bitmead@london.ac.uk>","data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;london@coursera.org",23:59,,
+imperial,"global-mph-imperial,mbbs-imperial","'Irene Kalkanis'<i.kalkanis@imperial.ac.uk>;'Stephen Squires'<s.squires@imperial.ac.uk>","data-engineering-team@coursera.org;sam@coursera.org;mfitzmaurice@coursera.org;imperial@coursera.org",23:59,mbbs-imperial:applications,
+hse,master-of-data-science-hse,,"mfitzmaurice@coursera.org;pmukiibi@coursera.org;xyang@coursera",23:59,,
