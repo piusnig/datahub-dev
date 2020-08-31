@@ -17,7 +17,7 @@ import re
 import tempfile
 from collections import OrderedDict
 from datetime import datetime
-from io import StringIO
+from io import StringIO, BytesIO
 
 import boto3
 import botocore
@@ -69,7 +69,7 @@ def lambda_handler(event, context=None):
 
                         # 4. check file column data types
                         status = validate_file.validate_field_datatypes(file, settings)
-                        
+
                         if status == "Success":
 
                             # 5. check pk violation
@@ -82,7 +82,7 @@ def lambda_handler(event, context=None):
                                 )
 
                         else:
-                           
+
                             log = error_logs.log_info_wrong_field_datatypes(
                                 file, status
                             )
@@ -104,9 +104,9 @@ def lambda_handler(event, context=None):
 
                 # add logs to logs_bucket
                 error_logs.add_logs_to_bucker(settings.logs_bucket, log)
-            print(file.file_path,": status: ", status)
+            print(file.file_path, ": status: ", status)
             return status
-        
+
     except KeyError:
         raise KeyError(f"Wrong lambda event Key supplied {KeyError}")
 
@@ -146,7 +146,9 @@ class ValidateFile:
                 len(file_path_list) == 4
                 and file_path_list[2] in settings.partner_folders
             ):
-                excepted_files = ["finance_transactions", "finance_metadata",
+                excepted_files = [
+                    "finance_transactions",
+                    "finance_metadata",
                 ]
                 mt_data = settings.get_metadata()
 
@@ -187,14 +189,16 @@ class ValidateFile:
                 ].drop_duplicates(keep="first")
             )
             message = "Success"
-            file_names = ['applications',
-            'degree_course_memberships',
-            'degree_courses',
-            'degree_terms_courses',
-            'degree_program_memberships',
-            'degree_term_memberships',
-            'terms',
-            'students',]
+            file_names = [
+                "applications",
+                "degree_course_memberships",
+                "degree_courses",
+                "degree_terms_courses",
+                "degree_program_memberships",
+                "degree_term_memberships",
+                "terms",
+                "students",
+            ]
             if (
                 len(file_name[-1].split(".")) != 2
                 or not mt_file_prefix
@@ -815,7 +819,7 @@ class Settings:
                         "VARCHAROPTNS": r"^(?!("
                         + str(mandatory_values.split(","))
                         .strip()
-                        .replace('\\','')
+                        .replace("\\", "")
                         .replace(",", "$|^")
                         .replace("'", "")
                         .replace("|^ ", "|^")
@@ -840,8 +844,9 @@ class BucketFileData:
         try:
 
             res = self.s3.get_object(Bucket=bucket, Key=file_path)["Body"]
+
             data_frame = pd.read_csv(
-                res,
+                BytesIO(res.read()),
                 encoding="ISO-8859-1",
                 keep_default_na=False,
                 na_values=["NULL", ""],
@@ -849,8 +854,13 @@ class BucketFileData:
             data_frame.columns = map(str.lower, data_frame.columns)
 
             return data_frame
-        except Exception as e:
-            pass
+        except BaseException as e:
+            print(
+                "exception: class BucketFileData: Method: read_csv: bucket: "
+                + file_path
+                + ": "
+                + str(e)
+            )
 
     def upload_csv(self, bucket, file_df, s3_file_path):
         try:
@@ -931,7 +941,7 @@ class SendEmail:
         """
         fromEmail = "datahub@coursera.org"
         replyTo = "datahub@coursera.org"
-        email=[[],[]]
+        email = [[], []]
         subject = (
             log["priority"]
             + ": LAMBDA TEST: Coursera Data Exchange Automated Alert: "
@@ -949,10 +959,7 @@ class SendEmail:
         client = boto3.client("ses")
         response = client.send_email(
             Source=fromEmail,
-            Destination={
-                "ToAddresses": email[1],
-                "BccAddresses": email[0],
-            },
+            Destination={"ToAddresses": email[1], "BccAddresses": email[0],},
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
                 "Body": {"Text": {"Data": message, "Charset": "UTF-8"}},

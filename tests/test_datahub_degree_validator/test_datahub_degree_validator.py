@@ -24,6 +24,7 @@ class TestLambdaHandler(TestBase):
     def test_lambda_handler_WHEN_correct_correct_files_event_THEN_Success(
         self, correct_files_event
     ):
+        print(lambda_handler(correct_files_event))
         assert "Success" == lambda_handler(correct_files_event)
 
     def test_lambda_handler_WHEN_WrongFileEvent_THEN_None(self, wrong_files_event):
