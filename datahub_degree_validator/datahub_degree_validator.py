@@ -156,12 +156,12 @@ class ValidateFile:
                     not in excepted_files
                 ):
                     return file_path_list
+            return
         except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_lambda_event: "
                 + str(e)
             )
-        return
 
     def validate_file_name(self, file_path_list, mt_data):
         """This method validates the file name
@@ -658,7 +658,7 @@ class ErrorLogging:
                     + str(log["description"][cols[-1]].sum())
                 )
                 i = 0
-                for index, rows in log["description"].iterrows():
+                for _, rows in log["description"].iterrows():
                     if i > 2:
                         break
                     desc += "\n\t\tFor: " + (
@@ -1068,8 +1068,8 @@ class SendEmail:
         log: list
             This is contains the log information to send
         """
-        fromEmail = "datahub@coursera.org"
-        replyTo = "datahub@coursera.org"
+        from_email = "datahub@coursera.org"
+        reply_to = "datahub@coursera.org"
         email = [[], []]
         subject = (
             log["priority"]
@@ -1087,13 +1087,13 @@ class SendEmail:
         message = self.get_email_message(log)
         client = boto3.client("ses")
         response = client.send_email(
-            Source=fromEmail,
+            Source=from_email,
             Destination={"ToAddresses": email[1], "BccAddresses": email[0]},
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
                 "Body": {"Text": {"Data": message, "Charset": "UTF-8"}},
             },
-            ReplyToAddresses=[replyTo],
+            ReplyToAddresses=[reply_to],
         )
         print(message)
         return {"code": 0, "message": response}
