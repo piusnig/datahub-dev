@@ -95,9 +95,9 @@ def lambda_handler(event, context=None):
 
                 # add logs to logs_bucket
                 email_flag = error_logs.add_logs_to_bucker(settings.logs_bucket, log)
-                # if email_flag:
-                #     # send_email
-                #     SendEmail().send_email(log)
+                if email_flag:
+                    # send_email
+                    SendEmail().send_email(log)
 
             print(file.file_path, ": status: ", status)
             return status
