@@ -184,20 +184,23 @@ class ValidateFile:
                 ].drop_duplicates(keep="first")
             )
             message = "Success"
-            file_names = set([
-                "applications",
-                "degree_course_memberships",
-                "degree_courses",
-                "degree_terms_courses",
-                "degree_program_memberships",
-                "degree_term_memberships",
-                "terms",
-                "students",
-            ] + list(
-                mt_data[mt_data["file_prefix"] == file_prefix]["file"].drop_duplicates(
-                    keep="first"
+            file_names = set(
+                [
+                    "applications",
+                    "degree_course_memberships",
+                    "degree_courses",
+                    "degree_terms_courses",
+                    "degree_program_memberships",
+                    "degree_term_memberships",
+                    "terms",
+                    "students",
+                ]
+                + list(
+                    mt_data[mt_data["file_prefix"] == file_prefix][
+                        "file"
+                    ].drop_duplicates(keep="first")
                 )
-            ))
+            )
             if (
                 len(file_name[-1].split(".")) != 2
                 or not mt_file_prefix
@@ -680,11 +683,11 @@ class ErrorLogging:
 
             df = pd.DataFrame(log, index=[0])
             file_logs_df = bfd.read_csv(logs_bucket, file_path)
-            email_flag = True
+            df["send_email"] = True
             if file_logs_df is not None:
                 # check if email already sent
                 if list(df["description"])[0] in list(file_logs_df["description"]):
-                    email_flag = False
+                    df["send_email"] = False
                 # concatenate logs
                 file_logs_df = pd.concat([file_logs_df[self.cols], df[self.cols]])[
                     self.cols
@@ -692,7 +695,7 @@ class ErrorLogging:
             else:
                 file_logs_df = df[self.cols]
             bfd.upload_csv(logs_bucket, file_logs_df, file_path)
-            return email_flag
+            return df["send_email"].values[0]
         except Exception as e:
             print(
                 "exception: class ErrorLogging: Method: add_logs_to_bucker: " + str(e)
