@@ -1,6 +1,8 @@
 import boto3
 import pytest
-from moto import mock_s3
+from moto import mock_s3, mock_ses
+import datetime
+from collections import OrderedDict
 
 PartnerBucket = "coursera-degrees-data"
 
@@ -101,20 +103,14 @@ def partner_bucket():
     return "coursera-degrees-data"
 
 
-@pytest.fixture
-def s3_conn():
-    with mock_s3():
-        client = boto3.client("s3", region_name="us-east-1")
-        yield client
-        client.close()
-
-
 @pytest.fixture()
-def moto_boto():
-    with mock_s3():
+def conns():
+    with mock_s3(), mock_ses():
 
         def boto_resource():
             res = boto3.client("s3",)
+            client = boto3.client("ses", region_name="us-east-1")
+            client.verify_email_identity(EmailAddress="datahub@coursera.org")
 
             settings_bucket = "coursera-data-engineering"
             upload_settings_test_files(res, settings_bucket)
@@ -125,7 +121,7 @@ def moto_boto():
             logs_bucket = "coursera-data-engineering"
             upload_partner_test_files(res, logs_bucket)
 
-            return res
+            return (res, client)
 
         yield boto_resource
 
@@ -164,3 +160,40 @@ def upload_file(res, bucket, folder, files):
         res.upload_file(
             file, bucket, "/".join(file.split("/")[2:]),
         )
+
+
+@pytest.fixture()
+def log():
+    log = OrderedDict(
+        [
+            ("error_code", 5),
+            ("error_type", "PK Violation"),
+            ("supplied_fields", ""),
+            ("expected_fields", ""),
+            ("no_supplied_fields", ""),
+            ("no_expected_fields", ""),
+            (
+                "description",
+                "\n\tDuplicates in Primary Key columns:\n\t\tstudent_id, admit_term_id: Total Duplicates: 4\n\t\tFor: 691262, 2310: Duplicates: 2\n\t\tFor: 1178592, 2260: Duplicates: 2\n\t\t...........",
+            ),
+            ("partner", "test"),
+            ("program", "degree"),
+            ("file_name", "degree_program_memberships_20200828.csv"),
+            (
+                "file_path",
+                "test/degree/enrollments/degree_program_memberships_20200828.csv",
+            ),
+            ("file_no_of_rows", 11),
+            ("log_file_name", "datahub_logs_test_degree_log_20200904.csv"),
+            (
+                "log_file_path",
+                "datahub/datahub_validator/logs/test/degree/datahub_logs_test_degree_log_20200904.csv",
+            ),
+            ("priority", "URGENT"),
+            ("partner_emails", ""),
+            ("internal_emails", "piusnig@gmail.com;pmukiibi@coursera.org"),
+            ("send_email", ""),
+            ("date_time", datetime.datetime(2020, 9, 4, 21, 9, 32, 320637)),
+        ]
+    )
+    return log
