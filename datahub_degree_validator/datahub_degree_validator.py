@@ -1,6 +1,6 @@
 """
     This script is the DataHub Data Validator:
-    So Once a new file lands in s3 DataHub bucket
+    So Once a new file lands in s3 DataHub bucket, validate automatically:
         1. Filenames are per spec
         2. Structure (ie fields)
         3. Content (ie rows and datatypes, PK vilations)
@@ -26,81 +26,36 @@ def lambda_handler(event, context=None):
 
         partner_bucket = event["detail"]["requestParameters"]["bucketName"]
 
-        validate_file = ValidateFile(partner_bucket)
+        validate_file = ValidateFile(settings, partner_bucket)
 
-        # Check if file should be processed
-        file_path_list = validate_file.validate_lambda_event(event, settings)
+        # Step 1: Check if file should be processed
+        file_path_list = validate_file.validate_lambda_event(event)
         if file_path_list:
 
-            # file object
+            # set Settings
+
+            log = OrderedDict()
             file = File(file_path_list)
 
-            # set Settings
-            settings.set_file_settings()
+            log = validate_file.validate_file_name(file_path_list)
 
-            # initiate error logging
-            error_logs = ErrorLogging(settings.ps_data)
-            log = OrderedDict()
+            if log == "Success":
+                log = validate_file.validate_file_empty(file)
 
-            # 1. check file name
-            status = validate_file.validate_file_name(file_path_list, settings.mt_data)
+            if log == "Success":
+                log = validate_file.validate_file_column_structure(file)
 
-            if status == "Success":
+            if log == "Success":
+                log = validate_file.validate_field_datatypes(file)
 
-                # reset settings for secific to the file
-                settings.set_file_settings(file.file_path_no_ext)
+            if log == "Success":
+                log = validate_file.validate_file_pk_violation(file)
 
-                # 2. check if file is empty
-                status = validate_file.validate_file_empty(file)
+            if log != "Success":
+                SendEmail().send_email(log[1])
 
-                if status == "Success":
-
-                    # 3. check file column structure
-                    status = validate_file.validate_file_column_structure(
-                        file, settings.mt_data
-                    )
-
-                    if status == "Success":
-
-                        # 4. check file column data types
-                        status = validate_file.validate_field_datatypes(file, settings)
-
-                        if status == "Success":
-
-                            # 5. check pk violation
-                            status = validate_file.validate_file_pk_violation(
-                                file, settings
-                            )
-                            if status != "Success":
-                                log = error_logs.log_info_file_pk_violation(
-                                    file, status
-                                )
-
-                        else:
-
-                            log = error_logs.log_info_wrong_field_datatypes(
-                                file, status
-                            )
-
-                    else:
-                        # logs for wrong_file_structure
-                        log = error_logs.log_info_wrong_file_structure(file, status)
-                else:
-                    log = error_logs.log_info_file_empty(file, status)
-            else:
-                # logs for wrong_file_name
-                log = error_logs.log_info_wrong_file_name(file, status)
-
-            if log:
-
-                # add logs to logs_bucket
-                email_flag = error_logs.add_logs_to_bucker(settings.logs_bucket, log)
-                if email_flag:
-                    # send_email
-                    SendEmail().send_email(log)
-
-            print(file.file_path, ": status: ", status)
-            return status
+            print(file_path_list, ": status: ", log, "\n")
+            return log
 
     except KeyError:
         raise KeyError(f"Wrong lambda event Key supplied {KeyError}")
@@ -114,11 +69,15 @@ class ValidateFile:
         file (File Object): That will store file object
     """
 
-    def __init__(self, partner_bucket="coursera-degrees-data"):
+    def __init__(self, settings, partner_bucket="coursera-degrees-data"):
         self.file = None
         self.partner_bucket = partner_bucket
+        self.settings = settings
+        self.settings.set_file_settings()
+        self.error_logs = ErrorLogging(settings)
+        self.bfd = BucketFileData()
 
-    def validate_lambda_event(self, event, settings):
+    def validate_lambda_event(self, event):
         """This method validates a lambda file event
 
         Attributes:
@@ -129,7 +88,7 @@ class ValidateFile:
             if correct event: file_path_list (list)
             else: None:
         """
-
+        settings = self.settings
         file_path_list = event["detail"]["requestParameters"]["key"]
         file_path_list = list(map(str.lower, file_path_list.split("/")))
         try:
@@ -163,7 +122,7 @@ class ValidateFile:
                 + str(e)
             )
 
-    def validate_file_name(self, file_path_list, mt_data):
+    def validate_file_name(self, file_path_list):
         """This method validates the file name
 
         Attributes:
@@ -175,15 +134,16 @@ class ValidateFile:
             else: message (dict)
         """
         try:
+
             file_name = file_path_list[3].split("_")
             file_prefix = file_path_list[:3] + ["_".join(file_name[:-1])]
             file_prefix = "/".join(file_prefix)
+            mt_data = self.settings.mt_data
             mt_file_prefix = list(
                 mt_data[mt_data["file_prefix"] == file_prefix][
                     "file_prefix"
                 ].drop_duplicates(keep="first")
             )
-            message = "Success"
             file_names = set(
                 [
                     "applications",
@@ -201,6 +161,7 @@ class ValidateFile:
                     ].drop_duplicates(keep="first")
                 )
             )
+            file = File(file_path_list)
             if (
                 len(file_name[-1].split(".")) != 2
                 or not mt_file_prefix
@@ -209,15 +170,19 @@ class ValidateFile:
                 or "_".join(file_path_list[3].split("_")[:-1]) not in file_names
             ):
 
-                message = {"error_code": 1, "file_path": file_path_list}
-                return message
-            return message
+                error = {"error_code": 1, "file_path": file_path_list}
+                log = self.error_logs.log_info_wrong_file_name(file, error)
+                email_flag = self.error_logs.add_logs_to_bucket(
+                    self.settings.logs_bucket, log
+                )
+                return (email_flag, log)
+            return "Success"
         except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_name: " + str(e)
             )
 
-    def validate_file_column_structure(self, file, mt_data):
+    def validate_file_column_structure(self, file):
         """This method validates the file column structure
 
         Attributes:
@@ -229,29 +194,34 @@ class ValidateFile:
             else: message (dict)
         """
         try:
+            mt_data = self.settings.get_metadata()
             file_structure_cols = list(
                 mt_data[mt_data["file_prefix"] == file.file_path_no_ext]["field"]
             )
 
-            file_data = BucketFileData().read_csv(self.partner_bucket, file.file_path)
+            file_data = self.bfd.read_csv(self.partner_bucket, file.file_path)
 
             file.file_no_of_rows = file_data.shape[0]
-            message = "Success"
 
             if file_structure_cols != list(file_data.columns):
-                message = {
+                error = {
                     "error_code": 2,
                     "supplied_fields": list(file_data.columns),
                     "expected_fields": file_structure_cols,
                 }
-            return message
+                log = self.error_logs.log_info_wrong_file_structure(file, error)
+                email_flag = self.error_logs.add_logs_to_bucket(
+                    self.settings.logs_bucket, log
+                )
+                return (email_flag, log)
+            return "Success"
         except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_column_structure: "
                 + str(e)
             )
 
-    def validate_field_datatypes(self, file, settings):
+    def validate_field_datatypes(self, file):
         """This method validates the file column datatypes
 
         Attributes:
@@ -263,6 +233,7 @@ class ValidateFile:
             else: message (dict)
         """
         try:
+            settings = self.settings
             fn_data = settings.fn_data
             mt_data = settings.mt_data
 
@@ -291,8 +262,12 @@ class ValidateFile:
                     if len(exceptns[field["field"]]) > 0:
                         message.append(exceptns)
             if message:
-                message = {"error_code": 4, "exceptions": message}
-                return message
+                error = {"error_code": 4, "exceptions": message}
+                log = self.error_logs.log_info_wrong_field_datatypes(file, error)
+                email_flag = self.error_logs.add_logs_to_bucket(
+                    self.settings.logs_bucket, log
+                )
+                return (email_flag, log)
 
             return "Success"
         except Exception as e:
@@ -317,32 +292,48 @@ class ValidateFile:
             message = "Success"
             file_data = BucketFileData().read_csv(self.partner_bucket, file.file_path)
             if file_data is None or file_data.empty:
-                message = {"error_code": 3}
+                error = {"error_code": 3}
+                log = self.error_logs.log_info_file_empty(file, error)
+                email_flag = self.error_logs.add_logs_to_bucket(
+                    self.settings.logs_bucket, log
+                )
+                return (email_flag, log)
+
             return message
         except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_empty: " + str(e)
             )
 
-    def validate_file_pk_violation(self, file, settings):
+    def validate_file_pk_violation(self, file):
         try:
-            fn_data = settings.fn_data
-            mt_data = settings.mt_data
+            self.settings.set_file_settings(file.file_path_no_ext)
+            fn_data = self.settings.fn_data
+
+            mt_data = self.settings.mt_data
 
             file_data = BucketFileData().read_csv(self.partner_bucket, file.file_path)
-            message = "Success"
+
             pk_cols = mt_data[mt_data["unique_pk"] == 1]["field"].values.tolist()
             if not pk_cols:
                 pk_cols = fn_data[fn_data["pk"] == 1]["field"].values.tolist()
             pks_rows = file_data.pivot_table(
                 index=pk_cols, aggfunc="size"
             ).reset_index()
+
             pks_rows.columns = [*pks_rows.columns[:-1], "No"]
             pks_rows = pks_rows[pks_rows["No"] > 1].reset_index()
 
             if not pks_rows.empty:
-                message = {"error_code": 5, "pks_rows": pks_rows}
-            return message
+                error = {"error_code": 5, "pks_rows": pks_rows}
+
+                log = self.error_logs.log_info_file_pk_violation(file, error)
+                email_flag = self.error_logs.add_logs_to_bucket(
+                    self.settings.logs_bucket, log
+                )
+
+                return (email_flag, log)
+            return "Success"
         except Exception as e:
             print(
                 "exception: class ValidateFile: Method: validate_file_pk_violation: "
@@ -363,8 +354,8 @@ class ErrorLogging:
 
     """
 
-    def __init__(self, partner_schedule):
-        self.partner_schedule = partner_schedule
+    def __init__(self, settings):
+        self.partner_schedule = settings.ps_data
         self.error_types = {
             1: {"priority": "CRITICAL", "description": "wrong file name"},
             2: {"priority": "CRITICAL", "description": "wrong file structure"},
@@ -396,7 +387,7 @@ class ErrorLogging:
             )
             log["priority"] = self.error_types[error_log["error_code"]]["priority"]
             log = self.add_common_fields_to_log(log, file)
-            log["description"] = self.add_log_description(log)
+            log["description"] = self.add_log_desc_file_name(log)
             log = self.reorder_log(log)
 
             return log
@@ -427,7 +418,7 @@ class ErrorLogging:
             log["description"] = error_log["exceptions"]
             log["priority"] = self.error_types[error_log["error_code"]]["priority"]
             log = self.add_common_fields_to_log(log, file)
-            log["description"] = self.add_log_description(log)
+            log["description"] = self.add_log_desc_field_datatypes(log)
             log = self.reorder_log(log)
             return log
         except Exception as e:
@@ -454,7 +445,7 @@ class ErrorLogging:
                 if error_log["error_code"] in self.error_types
                 else "N/A"
             )
-            log["description"] = self.add_log_description(log)
+            log["description"] = self.add_log_desc_file_empty(log)
             log["priority"] = self.error_types[error_log["error_code"]]["priority"]
             log = self.add_common_fields_to_log(log, file)
             log = self.reorder_log(log)
@@ -489,7 +480,7 @@ class ErrorLogging:
             log[
                 "description"
             ] = f"\n\t{ file.file_name}: Number of Rows:  {file.file_no_of_rows}"
-            log["description"] += self.add_log_description(log)
+            log["description"] += self.add_log_desc_file_structure(log)
             log["priority"] = self.error_types[error_log["error_code"]]["priority"]
             log = self.add_common_fields_to_log(log, file)
             log["supplied_fields"] = ",".join(log["supplied_fields"])
@@ -523,23 +514,25 @@ class ErrorLogging:
             log["description"] = error_log["pks_rows"]
             log["priority"] = self.error_types[error_log["error_code"]]["priority"]
             log = self.add_common_fields_to_log(log, file)
-            log["description"] = self.add_log_description(log)
-            print(log["description"])
+            log["description"] = self.add_log_desc_pk_violation(log)
             log = self.reorder_log(log)
             return log
         except Exception as e:
             print(
-                "exception: class ErrorLogging: Method: log_info_wrong_field_datatypes: "
+                "exception: class ErrorLogging: Method: log_info_file_pk_violation: "
                 + str(e)
             )
 
     def add_common_fields_to_log(self, log, file):
+
         try:
             log["partner"] = file.partner_slug
+
             log["program"] = file.program_slug
             log["file_name"] = file.file_name
             log["file_path"] = file.file_path
             log["file_no_of_rows"] = file.file_no_of_rows
+
             log["log_file_name"] = "_".join(
                 [
                     "datahub_logs",
@@ -559,10 +552,10 @@ class ErrorLogging:
                 ]
             )
             log["date_time"] = self.date_time
+
             self.partner_schedule = self.partner_schedule[
                 self.partner_schedule["partner"] == file.partner_slug
             ]
-
             log["partner_emails"] = (
                 str(self.partner_schedule["partner_emails"].values.tolist()[0])
                 .replace("nan", "")
@@ -573,7 +566,6 @@ class ErrorLogging:
                 .replace("nan", "")
                 .strip()
             )
-
             return log
         except Exception as e:
             print(
@@ -581,7 +573,7 @@ class ErrorLogging:
                 + str(e)
             )
 
-    def add_log_description(self, log):
+    def add_log_desc_file_name(self, log):
         """This method creates a log description for given error codes
 
         Attributes:
@@ -591,90 +583,124 @@ class ErrorLogging:
             desc (str): log description
         """
         try:
-            desc = ""
-            if log["error_code"] == 1:  # file name
-                desc = " ".join(
-                    [
-                        "\n\t" + log["file_name"],
-                        ": File wrongly Named and cannot be processed.",
-                    ]
-                )
-            elif log["error_code"] == 2:  # file Structure
-                if log["no_supplied_fields"] != log["no_expected_fields"]:
-                    desc += " ".join(
-                        [
-                            "\n\t\tsupplied: ",
-                            log["no_supplied_fields"],
-                            "fields instead of: ",
-                            log["no_expected_fields"],
-                            "fields",
-                        ]
-                    )
-                    if set(log["expected_fields"]) - set(log["supplied_fields"]):
-                        desc += ".\n\t\tMissing fields: "
-                        desc += ", ".join(
-                            set(log["expected_fields"]) - set(log["supplied_fields"])
-                        )
-                    if set(log["supplied_fields"]) - set(log["expected_fields"]):
-                        desc += ".\n\t\tWrong fields supplied: "
-                        desc += ", ".join(
-                            set(log["supplied_fields"]) - set(log["expected_fields"])
-                        )
-                else:
-                    for i, _ in enumerate(log["supplied_fields"]):
-                        if log["supplied_fields"][i] != log["expected_fields"][i]:
-                            desc += " ".join(
-                                [
-                                    "\n\t\tsupplied: ",
-                                    "'" + log["supplied_fields"][i] + "'",
-                                    "instead of: ",
-                                    "'" + "".join(log["expected_fields"][i]) + "'",
-                                ]
-                            )
+            desc = " ".join(
+                [
+                    "\n\t" + log["file_name"],
+                    ": File wrongly Named and cannot be processed.",
+                ]
+            )
 
-                    desc += ".\n\tFile is poorly formated and cannot be processed."
-            elif log["error_code"] == 3:  # file Empty
-                desc = ": empty file sent"
-            elif log["error_code"] == 4:  # field datatypes
-                for exceptns in log["description"]:
-                    for field in exceptns:
-                        desc += ": ".join(
-                            [
-                                "\n\tMandatory Field",
-                                field,
-                                "Number of Exceptions",
-                                str(len(exceptns[field])),
-                                "wrong values include",
-                                ", ".join(exceptns[field][:3]) + "....",
-                            ]
-                        )
-            elif log["error_code"] == 5:  # field pk violation
-                cols = list(log["description"].columns)
-                desc = (
-                    "\n\tDuplicates in Primary Key columns:"
-                    + "\n\t\t"
-                    + ", ".join(cols[1:-1])
-                    + ": Total Duplicates: "
-                    + str(log["description"][cols[-1]].sum())
-                )
-                i = 0
-                for _, rows in log["description"].iterrows():
-                    if i > 2:
-                        break
-                    desc += "\n\t\tFor: " + (
-                        ", ".join(map(str, list(rows[cols[1:-1]])))
-                        + ": Duplicates: "
-                        + str(rows[cols[-1]])
-                    )
-                    i += 1
-                desc += "\n\t\t..........."
             return desc
         except Exception as e:
             print(
-                "exception: class ErrorLogging: Method: add_log_description: " + str(e)
+                "exception: class ErrorLogging: Method: add_log_desc_file_name: "
+                + str(e)
             )
 
-    def add_logs_to_bucker(self, logs_bucket, log):
+    def add_log_desc_file_structure(self, log):
+        try:
+            desc = ""
+            if log["no_supplied_fields"] != log["no_expected_fields"]:
+                desc += " ".join(
+                    [
+                        "\n\t\tsupplied: ",
+                        log["no_supplied_fields"],
+                        "fields instead of: ",
+                        log["no_expected_fields"],
+                        "fields",
+                    ]
+                )
+                if set(log["expected_fields"]) - set(log["supplied_fields"]):
+                    desc += ".\n\t\tMissing fields: "
+                    desc += ", ".join(
+                        set(log["expected_fields"]) - set(log["supplied_fields"])
+                    )
+                if set(log["supplied_fields"]) - set(log["expected_fields"]):
+                    desc += ".\n\t\tWrong fields supplied: "
+                    desc += ", ".join(
+                        set(log["supplied_fields"]) - set(log["expected_fields"])
+                    )
+            else:
+                for i, _ in enumerate(log["supplied_fields"]):
+                    if log["supplied_fields"][i] != log["expected_fields"][i]:
+                        desc += " ".join(
+                            [
+                                "\n\t\tsupplied: ",
+                                "'" + log["supplied_fields"][i] + "'",
+                                "instead of: ",
+                                "'" + "".join(log["expected_fields"][i]) + "'",
+                            ]
+                        )
+
+                    desc += ".\n\tFile is poorly formated and cannot be processed."
+            return desc
+        except Exception as e:
+            print(
+                "exception: class ErrorLogging: Method: add_log_desc_file_structure: "
+                + str(e)
+            )
+
+    def add_log_desc_file_empty(self, log):
+        try:
+            desc = ": empty file sent"
+            return desc
+        except Exception as e:
+            print(
+                "exception: class ErrorLogging: Method: add_log_desc_file_empty: "
+                + str(e)
+            )
+
+    def add_log_desc_field_datatypes(self, log):
+        try:
+            desc = ""
+            for exceptns in log["description"]:
+                for field in exceptns:
+                    desc += ": ".join(
+                        [
+                            "\n\tMandatory Field",
+                            field,
+                            "Number of Exceptions",
+                            str(len(exceptns[field])),
+                            "wrong values include",
+                            ", ".join(exceptns[field][:3]) + "....",
+                        ]
+                    )
+            return desc
+        except Exception as e:
+            print(
+                "exception: class ErrorLogging: Method: add_log_desc_field_datatypes: "
+                + str(e)
+            )
+
+    def add_log_desc_pk_violation(self, log):
+        try:
+            cols = list(log["description"].columns)
+            desc = (
+                "\n\tDuplicates in Primary Key columns:"
+                + "\n\t\t"
+                + ", ".join(cols[1:-1])
+                + ": Total Duplicates: "
+                + str(log["description"][cols[-1]].sum())
+            )
+            i = 0
+            for _, rows in log["description"].iterrows():
+                if i > 2:
+                    break
+                desc += "\n\t\tFor: " + (
+                    ", ".join(map(str, list(rows[cols[1:-1]])))
+                    + ": Duplicates: "
+                    + str(rows[cols[-1]])
+                )
+                i += 1
+            desc += "\n\t\t..........."
+            return desc
+        except Exception as e:
+            print(
+                "exception: class ErrorLogging: Method: add_log_desc_pk_violation: "
+                + str(e)
+            )
+
+    def add_logs_to_bucket(self, logs_bucket, log):
         try:
             # datahub_error_logs_partner_program_file_date.csv
 
@@ -698,7 +724,7 @@ class ErrorLogging:
             return df["send_email"].values[0]
         except Exception as e:
             print(
-                "exception: class ErrorLogging: Method: add_logs_to_bucker: " + str(e)
+                "exception: class ErrorLogging: Method: add_logs_to_bucket: " + str(e)
             )
 
     def reorder_log(self, error_log):
@@ -962,13 +988,8 @@ class BucketFileData:
             data_frame.columns = map(str.lower, data_frame.columns)
 
             return data_frame
-        except Exception as e:
-            print(
-                "exception: class BucketFileData: Method: read_csv: bucket: "
-                + file_path
-                + ": "
-                + str(e)
-            )
+        except Exception:
+            return
 
     def upload_csv(self, bucket, file_df, s3_file_path):
         """Function upload csv file into bucket and returns a pandas data frame
@@ -1085,7 +1106,7 @@ class SendEmail:
             email[1] = log["partner_emails"].split(";")
 
         message = self.get_email_message(log)
-        client = boto3.client("ses")
+        client = boto3.client("ses", region_name="us-east-1")
         response = client.send_email(
             Source=from_email,
             Destination={"ToAddresses": email[1], "BccAddresses": email[0]},
@@ -1095,7 +1116,6 @@ class SendEmail:
             },
             ReplyToAddresses=[reply_to],
         )
-        print(message)
         return {"code": 0, "message": response}
 
     def get_email_message(self, log):

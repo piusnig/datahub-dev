@@ -1,7 +1,8 @@
-from moto import mock_s3
+from moto import mock_s3, mock_ses
 
 
 @mock_s3
+@mock_ses
 class TestBase:
-    def test_set_up(self, moto_boto):
-        moto_boto()
+    def test_set_up(self, conns):
+        conns()
