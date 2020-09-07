@@ -1,6 +1,6 @@
 """
     This script is the DataHub Data Validator:
-    So Once a new file lands in s3 DataHub bucket, validate automatically:
+    So Once a new file lands in s3 DataHub bucket
         1. Filenames are per spec
         2. Structure (ie fields)
         3. Content (ie rows and datatypes, PK vilations)
