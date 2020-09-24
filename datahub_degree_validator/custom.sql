@@ -1,3 +1,3 @@
 SELECT *
-  FROM office_locations
+  FROM office_locations 
   
