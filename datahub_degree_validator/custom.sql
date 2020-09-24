@@ -1,2 +1,2 @@
 SELECT
-city FROM office_locations
+city from office_locations;
