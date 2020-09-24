@@ -24,9 +24,9 @@ jobs:
       - name: SQL Linting with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
-          # flake8 --filename=*.sql . --count --select=W291 --show-source --statistics
+          flake8 --filename=*.sql . --count --select=W291 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-          flake8 --filename=*.sql . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          # flake8 --filename=*.sql . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Python Linting with flake8
         uses: grantmcconnaughey/lintly-flake8-github-action@v1.0
         with:
