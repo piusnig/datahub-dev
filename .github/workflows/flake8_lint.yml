@@ -27,7 +27,7 @@ jobs:
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 --filename=*.sql . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Python Linting with flake8
-        uses: grantmcconnaughey/lintly-flake8-github-action@v1.0
+        uses: grantmcconnaughey/lintly-flake8-github-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           failIf: new
