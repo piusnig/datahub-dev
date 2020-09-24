@@ -1,2 +1,1 @@
-SELECT MINE
-FROM pii.students
+SELECT FROM pii.students
