@@ -1,1 +1,2 @@
-SELECT city from office_locations 
+SELECT city
+  FROM office_locations
