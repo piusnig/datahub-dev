@@ -26,7 +26,7 @@ def lambda_handler(event, context=None):
 
         partner_bucket = event["detail"]["requestParameters"]["bucketName"]
 
-        validate_file = ValidateFile(settings, partner_bucket)
+        validate_file =       ValidateFile(settings, partner_bucket)
 
         # Step 1: Check if file should be processed
         file_path_list = validate_file.validate_lambda_event(event)
