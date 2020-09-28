@@ -1,2 +1,2 @@
-  "SELECT * from office_locations" 
+  "SELECT * from office_locations " 
   
