@@ -1,1 +1,1 @@
- "select * from office_location" 
+ "select * from office_locations" 
