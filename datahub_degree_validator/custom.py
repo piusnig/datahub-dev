@@ -1,2 +1,2 @@
-d= "select * from office_locations" 
+d= "select * from office_locations " 
   
