@@ -24,7 +24,8 @@ jobs:
         run: |
           # stop the build if there are Python syntax errors or undefined names
           # flake8 --show-source */custom.sql
-          flake8 --show-source --select=Q */custom.*
+          # flake8 --show-source --select=Q */custom.*
+          flake8 --filename=*.sql . --count --select=Q --show-source --statistics
           # flake8 --filename=*.py --enable-extensions sql --select Q --show-source
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           # flake8 --filename=*.py --select=Q
