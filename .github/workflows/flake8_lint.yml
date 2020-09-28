@@ -23,7 +23,7 @@ jobs:
       - name: SQL Linting with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
-          flake8 --enable-extensions Q,sql --filename=*/custom.py
+          flake8 --filename=*/custom.sql
           # flake8 --filename=*.py --enable-extensions sql --select Q --show-source
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           # flake8 --filename=*.py --select=Q
